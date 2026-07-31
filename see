@@ -1,0 +1,246 @@
+-- [[ 本地測試偽裝區 ]]
+if not game then
+    -- 如果不在 Roblox 環境，就自己創造一個假的 game 物件
+    game = {
+        GetService = function(self, serviceName)
+            return {
+                -- 偽造一個固定的 ClientId 當作 HWID 測試
+                GetClientId = function() return "LOCAL-TEST-ID-99999" end
+            }
+        end
+    }
+    warn = print -- 把 warn 指向 print
+end
+-- [[ 偽裝結束 ]]
+
+-- 下面才是你原本的代碼
+local hwid = game:GetService("RbxAnalyticsService"):GetClientId()
+print("目前抓到的 HWID: " .. hwid)
+
+
+
+
+-- ==========================================
+-- Kexuan Zenith | V4.0.2 (功能全補完版)
+-- ==========================================
+
+-- 1. 環境初始化
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local VIM = game:GetService("VirtualInputManager")
+local LP = game:GetService("Players").LocalPlayer
+local camera = workspace.CurrentCamera
+UserInputService.ModalEnabled = false 
+
+-- 確保 Luna 庫正常載入
+local Luna = loadstring(game:HttpGet("https://raw.githubusercontent.com/Nebula-Softworks/Luna-Interface-Suite/main/source.lua"))()
+
+-- 2. 視窗初始化
+local Window = Luna:CreateWindow({
+    Name = "Kexuan Zenith | 旗艦版",
+    Subtitle = "V4.0.2 - 功能全補完",
+    Color = Color3.fromRGB(0, 170, 255),
+    ConfigSaving = false
+})
+
+-- 3. 分頁構建
+local Tab1 = Window:CreateTab({Name = "Main"})
+local Tab2 = Window:CreateTab({Name = "戰鬥模組"})
+local TabBoat = Window:CreateTab({Name = "航海模組"})
+local Tab3 = Window:CreateTab({Name = "功能/透視"})
+local Tab4 = Window:CreateTab({Name = "介面設定"})
+
+-- --- 全域變數初始化 (嚴格遵守：絕不精簡) ---
+_G.CatSpeedActive = false
+_G.CatSpeedValue = 50
+_G.AutoV3 = false
+_G.AutoV4 = false
+_G.AutoBuso = true
+_G.NoClip = false
+_G.EnergyValue = 14095
+_G.ShowESP_ID = false
+_G.ShowESP_Health = false
+_G.ShowTracer = false
+
+-- 航海模組變數
+_G.BoatSpeedActive = false
+_G.BoatSpeedValue = 500
+_G.BoatFlyActive = false
+_G.BoatFlyHeight = 250
+_G.BoatAutoCruise = false
+
+-- --- [分頁 1: Main] ---
+Tab1:CreateSection("--- 移動加速 (平滑位移) ---")
+Tab1:CreateToggle({Name = "開啟平滑加速", CurrentValue = false, Callback = function(V) _G.CatSpeedActive = V end})
+Tab1:CreateSlider({Name = "調整速度數值", Range = {0, 500}, CurrentValue = 50, Callback = function(V) _G.CatSpeedValue = V end})
+Tab1:CreateSection("--- 必備工具 ---")
+Tab1:CreateButton({
+    Name = "飛行 (FLY GUI)", 
+    Callback = function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/dt106101-ai/fly-gui-by-kexuan/refs/heads/main/README.md"))() end) end
+})
+Tab1:CreateButton({
+    Name = "啟動快速攻擊", 
+    Callback = function() 
+        _G.FastAttack = true
+        pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/kexuan001/Fast-attack-in-pc/refs/heads/main/buso.lua"))() end) 
+    end
+})
+
+-- --- [分頁 2: 戰鬥模組] ---
+Tab2:CreateToggle({Name = "自動 V3 覺醒", CurrentValue = false, Callback = function(V) _G.AutoV3 = V end})
+Tab2:CreateToggle({Name = "自動 V4 變身", CurrentValue = false, Callback = function(V) _G.AutoV4 = V end})
+Tab2:CreateToggle({Name = "自動武裝色", CurrentValue = true, Callback = function(V) _G.AutoBuso = V end})
+local NoClipToggle = Tab2:CreateToggle({Name = "開啟穿牆 (快捷鍵 G)", CurrentValue = false, Callback = function(V) _G.NoClip = V end})
+Tab2:CreateSection("--- 數值鎖定 ---")
+Tab2:CreateSlider({Name = "能量鎖定", Range = {100, 14095}, CurrentValue = 14095, Callback = function(V) _G.EnergyValue = V end})
+Tab2:CreateSlider({Name = "視角最大縮放", Range = {128, 5000}, CurrentValue = 500, Callback = function(V) LP.CameraMaxZoomDistance = V end})
+
+-- --- [分頁: 航海模組] ---
+TabBoat:CreateSection("--- 船隻物理加速 ---")
+TabBoat:CreateToggle({Name = "開啟船隻加速總開關", CurrentValue = false, Callback = function(V) _G.BoatSpeedActive = V end})
+TabBoat:CreateSlider({Name = "物理速度數值", Range = {100, 1000}, CurrentValue = 350, Callback = function(V) _G.BoatSpeedValue = V end})
+
+TabBoat:CreateSection("--- 座標強推巡航 ---")
+TabBoat:CreateToggle({Name = "開啟座標自動前進", CurrentValue = false, Callback = function(V) _G.BoatAutoCruise = V end})
+
+TabBoat:CreateSection("--- 船隻飛行 ---")
+local FlyToggle = TabBoat:CreateToggle({Name = "開啟船隻飛行 (快捷鍵 F)", CurrentValue = false, Callback = function(V) _G.BoatFlyActive = V end})
+TabBoat:CreateSlider({Name = "飛行高度鎖定", Range = {0, 1000}, CurrentValue = 250, Callback = function(V) _G.BoatFlyHeight = V end})
+
+-- --- [核心循環邏輯] ---
+
+-- 快捷鍵聯動 (G 穿牆, F 飛行)
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == Enum.KeyCode.G then
+        _G.NoClip = not _G.NoClip
+        NoClipToggle:Set(_G.NoClip)
+    elseif input.KeyCode == Enum.KeyCode.F then
+        _G.BoatFlyActive = not _G.BoatFlyActive
+        FlyToggle:Set(_G.BoatFlyActive)
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    local char = LP.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+
+    -- 航海核心邏輯
+    if hum and hum.SeatPart and hum.SeatPart:IsA("VehicleSeat") then
+        local seat = hum.SeatPart
+        local boat = seat.Parent
+        
+        -- 物理加速同步
+        if _G.BoatSpeedActive then seat.MaxSpeed = _G.BoatSpeedValue else seat.MaxSpeed = 80 end
+
+        -- 座標強推位移
+        if _G.BoatAutoCruise or _G.BoatFlyActive then
+            local currentCF = boat:GetPivot()
+            local nextCF = currentCF
+            if _G.BoatAutoCruise then
+                nextCF = nextCF * CFrame.new(0, 0, -2.5) -- 防回溯步長
+            end
+            local finalY = _G.BoatFlyActive and _G.BoatFlyHeight or currentCF.Position.Y
+            boat:PivotTo(CFrame.new(nextCF.Position.X, finalY, nextCF.Position.Z) * nextCF.Rotation)
+            
+            for _, p in pairs(boat:GetDescendants()) do
+                if p:IsA("BasePart") then p.Velocity = Vector3.zero; p.RotVelocity = Vector3.zero end
+            end
+        end
+    end
+
+    -- 玩家基礎核心
+    if _G.CatSpeedActive and hum and hum.MoveDirection.Magnitude > 0 then
+        char:TranslateBy(hum.MoveDirection * (_G.CatSpeedValue / 10))
+    end
+    if _G.AutoV3 then
+        VIM:SendKeyEvent(true, Enum.KeyCode.T, false, game); task.wait(0.01); VIM:SendKeyEvent(false, Enum.KeyCode.T, false, game)
+    end
+    if _G.AutoV4 then
+        local awake = LP.Backpack:FindFirstChild("Awakening") or char:FindFirstChild("Awakening")
+        if awake then awake.RemoteFunction:InvokeServer(true) end
+    end
+    if _G.AutoBuso and not char:FindFirstChild("HasBuso") then
+        ReplicatedStorage.Remotes.CommF_:InvokeServer("Buso")
+    end
+    if _G.EnergyValue and char:FindFirstChild("Energy") then char.Energy.Value = _G.EnergyValue end
+end)
+
+-- 穿牆實作
+RunService.Stepped:Connect(function()
+    if LP.Character then
+        for _, v in pairs(LP.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = not _G.NoClip end end
+    end
+end)
+
+-- --- [分頁 3: 透視核心] ---
+local TracerGui = game:GetService("CoreGui"):FindFirstChild("Kexuan_Tracer_System") or Instance.new("ScreenGui", game:GetService("CoreGui"))
+TracerGui.Name = "Kexuan_Tracer_System"
+
+Tab3:CreateToggle({Name = "顯示玩家 ID (20號字)", CurrentValue = false, Callback = function(V) _G.ShowESP_ID = V end})
+Tab3:CreateToggle({Name = "顯示血量數值 (20號字)", CurrentValue = false, Callback = function(V) _G.ShowESP_Health = V end})
+Tab3:CreateToggle({Name = "顯示連接射線", CurrentValue = false, Callback = function(V) _G.ShowTracer = V end})
+
+RunService.RenderStepped:Connect(function()
+    for _, p in pairs(game:GetService("Players"):GetPlayers()) do
+        if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = p.Character.HumanoidRootPart
+            local char = p.Character
+            local tracer = TracerGui:FindFirstChild(p.Name .. "_Tracer")
+            
+            if _G.ShowTracer then
+                if not tracer then
+                    tracer = Instance.new("Frame", TracerGui); tracer.Name = p.Name .. "_Tracer"
+                    tracer.BackgroundColor3 = Color3.new(1,1,1); tracer.BorderSizePixel = 0; tracer.AnchorPoint = Vector2.new(0.5, 0.5)
+                end
+                local v, on = camera:WorldToViewportPoint(hrp.Position)
+                if on then
+                    local sPos = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y)
+                    local tPos = Vector2.new(v.X, v.Y)
+                    tracer.Size = UDim2.new(0, (sPos - tPos).Magnitude, 0, 1)
+                    tracer.Position = UDim2.new(0, (sPos.X + tPos.X)/2, 0, (sPos.Y + tPos.Y)/2)
+                    tracer.Rotation = math.atan2(tPos.Y - sPos.Y, tPos.X - sPos.X) * (180/math.pi)
+                    tracer.Visible = true
+                else tracer.Visible = false end
+            elseif tracer then tracer.Visible = false end
+
+            local tag = char:FindFirstChild("LunaSplitTag")
+            if (_G.ShowESP_ID or _G.ShowESP_Health) then
+                if not tag then
+                    tag = Instance.new("BillboardGui", char); tag.Name = "LunaSplitTag"; tag.AlwaysOnTop = true
+                    tag.Size = UDim2.new(0, 300, 0, 100); tag.Adornee = char:FindFirstChild("Head") or hrp
+                    local l = Instance.new("TextLabel", tag); l.BackgroundTransparency = 1; l.Size = UDim2.new(1,0,1,0); l.Name = "InfoLabel"
+                    l.TextColor3 = Color3.new(1,1,1); l.Font = Enum.Font.GothamBold; l.TextSize = 20; l.RichText = true; l.TextStrokeTransparency = 0
+                end
+                local d = math.floor((LP.Character.HumanoidRootPart.Position - hrp.Position).Magnitude)
+                local c = "<b>" .. p.DisplayName .. "</b>"
+                if _G.ShowESP_ID then c = c .. "\n[" .. d .. "m]" end
+                if _G.ShowESP_Health and char:FindFirstChild("Humanoid") then
+                    c = c .. '\n<font color="#00FF00">HP: ' .. math.floor(char.Humanoid.Health) .. "</font>"
+                end
+                tag.InfoLabel.Text = c; tag.Enabled = true
+            elseif tag then tag.Enabled = false end
+        end
+    end
+end)
+
+-- 懸浮球
+local ScreenGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
+local FloatIcon = Instance.new("ImageButton", ScreenGui)
+FloatIcon.Size = UDim2.new(0, 55, 0, 55); FloatIcon.Position = UDim2.new(0.05, 0, 0.4, 0)
+FloatIcon.BackgroundColor3 = Color3.fromRGB(20, 20, 20); FloatIcon.Image = "rbxassetid://4483345906"
+Instance.new("UICorner", FloatIcon).CornerRadius = UDim.new(1, 0); FloatIcon.Draggable = true
+FloatIcon.MouseButton1Click:Connect(function()
+    local lunaGui = game:GetService("CoreGui"):FindFirstChild("Luna")
+    if lunaGui then
+        local main = lunaGui:FindFirstChildOfClass("Frame")
+        main.Visible = not main.Visible
+        UserInputService.ModalEnabled = false
+    end
+end)
+
+Luna:Notification({Title = "Kexuan Zenith", Content = "V4.0.2 能量鎖定與視角縮放已補回", Duration = 3})
+
+Luna:Notification({Title = "Kexuan Zenith", Content = "V2.0.7 射線清理邏輯修復", Duration = 3})
